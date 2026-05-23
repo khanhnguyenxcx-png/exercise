@@ -2,344 +2,213 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Computer Vision Workout Timer</title>
-    <!-- Import Tesseract.js for browser-side OCR text reading -->
-    <script src="https://unpkg.com/tesseract.js@5.0.2/dist/tesseract.min.js"></script>
+    <title>Workout Muter & Countdown</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             background-color: #121212;
             color: #ffffff;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
+            padding: 40px 20px;
             margin: 0;
-            padding: 20px;
         }
-
-        .container {
-            max-width: 900px;
-            width: 100%;
-            text-align: center;
-        }
-
-        h1 { color: #ff4757; margin-bottom: 5px; }
-        p { color: #a4b0be; margin-bottom: 25px; }
-
-        .setup-panel {
+        .card {
             background: #1e1e1e;
-            padding: 20px;
+            padding: 24px;
             border-radius: 12px;
-            margin-bottom: 20px;
-            border: 2px dashed #333;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            max-width: 600px;
+            width: 100%;
+            margin-bottom: 24px;
         }
-
-        .file-btn {
-            background-color: #ff4757;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            display: inline-block;
+        .input-group {
+            margin-bottom: 16px;
         }
-
-        button {
-            background-color: #2ed573;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        /* Container for layering video and crop tools */
-        .video-container {
-            position: relative;
-            display: inline-block;
-            max-width: 100%;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        video {
+        label {
             display: block;
-            width: 100%;
-            max-height: 70vh;
-        }
-
-        /* Red interactive framing layer for focusing the OCR engine */
-        #cropBox {
-            position: absolute;
-            border: 3px solid #ff4757;
-            background-color: rgba(255, 71, 87, 0.15);
-            cursor: move;
-            top: 20px;
-            left: 20px;
-            width: 120px;
-            height: 60px;
-            box-sizing: border-box;
-            display: none;
-        }
-
-        /* Resizing handles */
-        #cropBox::after {
-            content: '';
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background: #ff4757;
-            right: -6px;
-            bottom: -6px;
-            cursor: se-resize;
-        }
-
-        .debug-panel {
-            margin-top: 15px;
-            background: #1e1e1e;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: monospace;
-            display: flex;
-            justify-content: space-around;
+            margin-bottom: 8px;
+            color: #a4b0be;
             font-size: 14px;
         }
-
-        .live-value { color: #ff4757; font-weight: bold; }
-        
-        /* Hidden layout canvas for isolating target pixels */
-        canvas { display: none; }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #2f3542;
+            border: 1px solid #57606f;
+            border-radius: 6px;
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #ff6b81;
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            width: 100%;
+            max-width: 800px;
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>AI Vision Workout Muter</h1>
-    <p>Upload a video, place the red crop frame directly over the changing timer digits, and let the AI read the numbers live!</p>
-
-    <div class="setup-panel">
-        <label for="videoUpload" class="file-btn">Select Workout Video</label>
-        <input type="file" id="videoUpload" accept="video/*" style="display:none;">
-        <br>
-        <button id="startTrackBtn" style="display:none;">Start AI Vision Tracking</button>
-    </div>
-
-    <div class="video-container">
-        <video id="workoutVideo" controls></video>
-        <!-- User dynamic bounding box placement over the numbers -->
-        <div id="cropBox"></div>
-    </div>
-
-    <div class="debug-panel" id="debugInfo" style="display: none;">
-        <div>AI Status: <span id="aiStatus" style="color: #2ed573;">Initializing...</span></div>
-        <div>Last Read Text: "<span id="lastText" class="live-value">--</span>"</div>
-        <div>Detected Seconds: <span id="detectedSec" class="live-value">--</span></div>
-    </div>
-
-    <!-- Processing canvas targets -->
-    <canvas id="processingCanvas"></canvas>
-</div>
-
-<script>
-    const videoUpload = document.getElementById('videoUpload');
-    const video = document.getElementById('workoutVideo');
-    const cropBox = document.getElementById('cropBox');
-    const startTrackBtn = document.getElementById('startTrackBtn');
-    const debugPanel = document.getElementById('debugInfo');
-    const aiStatus = document.getElementById('aiStatus');
-    const lastText = document.getElementById('lastText');
-    const detectedSec = document.getElementById('detectedSec');
-    const canvas = document.getElementById('processingCanvas');
-    const ctx = canvas.getContext('2d');
-
-    let ocrWorker = null;
-    let trackingLoop = null;
-    let isOcrProcessing = false;
-
-    // Trackers to prevent multi-firing within the same clock changes
-    let triggered10 = false;
-    let triggered3 = false;
-    let triggered2 = false;
-    let triggered1 = false;
-
-    // Browser local Speech Synthesis
-    const synth = window.speechSynthesis;
-    function speak(phrase) {
-        synth.cancel(); // Drop current backlogs to strike on time
-        const voiceEng = new SpeechSynthesisUtterance(phrase);
-        voiceEng.rate = 1.15;
-        synth.speak(voiceEng);
-    }
-
-    // Initialize Tesseract Engine automatically on mount
-    (async () => {
-        aiStatus.innerText = "Loading AI Core...";
-        ocrWorker = await Tesseract.createWorker('eng');
-        // Configure options to look ONLY for numbers and clock structures
-        await ocrWorker.setParameters({
-            tessedit_char_whitelist: '0123456789:',
-            tessedit_pageseg_mode: '6' // Treat target crop region as a single uniform text block
-        });
-        aiStatus.innerText = "AI Vision System Ready";
-    })();
-
-    // Handle Local File Uploading streams
-    videoUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        video.src = URL.createObjectURL(file);
-        video.muted = true; // Permanently lock down sound feeds
-        cropBox.style.display = 'block';
-        startTrackBtn.style.display = 'inline-block';
-        debugPanel.style.display = 'flex';
-        speak("System configured. Align the red window over the clock layout.");
-    });
-
-    // Start video evaluation loop
-    startTrackBtn.addEventListener('click', () => {
-        video.play();
-        aiStatus.innerText = "Scanning Active...";
-        // Scan the target frame region roughly 3-4 times every second
-        trackingLoop = setInterval(analyzeFramePixels, 300);
-    });
-
-    async function analyzeFramePixels() {
-        // Halt if core systems are busy or video is paused
-        if (isOcrProcessing || video.paused || video.ended || !ocrWorker) return;
-
-        // Calculate scaling variables matching layout to native video dimension
-        const scaleX = video.videoWidth / video.clientWidth;
-        const scaleY = video.videoHeight / video.clientHeight;
-
-        // Pull geometry bounds of crop overlay box
-        const targetX = cropBox.offsetLeft * scaleX;
-        const targetY = cropBox.offsetTop * scaleY;
-        const targetW = cropBox.offsetWidth * scaleX;
-        const targetH = cropBox.offsetHeight * scaleY;
-
-        if (targetW <= 0 || targetH <= 0) return;
-
-        // Resize rendering context target canvas
-        canvas.width = targetW;
-        canvas.height = targetH;
-
-        // Copy cropped zone pixel metadata onto the isolated storage canvas
-        ctx.drawImage(video, targetX, targetY, targetW, targetH, 0, 0, targetW, targetH);
-
-        // Turn image black-and-white to boost clarity against changing video backdrops
-        let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        let data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
-            let threshold = brightness > 140 ? 255 : 0; // Standard layout binary filter
-            data[i] = data[i+1] = data[i+2] = threshold; 
-        }
-        ctx.putImageData(imgData, 0, 0);
-
-        isOcrProcessing = true;
+    <div class="card">
+        <h2 style="color: #ff4757; margin-top: 0;">Mute & Motivate</h2>
         
-        try {
-            // Point AI engine at target cropped canvas element
-            const { data: { text } } = await ocrWorker.recognize(canvas);
-            const cleanedText = text.replace(/[^0-9:]/g, '').trim();
-            lastText.innerText = cleanedText || "[No digits detected]";
+        <div class="input-group">
+            <label for="videoUrl">YouTube Video Link</label>
+            <input type="text" id="videoUrl" placeholder="https://www.youtube.com/watch?v=...">
+        </div>
 
-            if (cleanedText) {
-                // Parse standard stopwatch notations like "00:10" or "0:03" down to basic values
-                const parts = cleanedText.split(':');
-                const parsedSeconds = parts.length > 1 ? parseInt(parts[parts.length - 1], 10) : parseInt(cleanedText, 10);
-                
-                if (!isNaN(parsedSeconds)) {
-                    detectedSec.innerText = parsedSeconds + "s";
-                    evaluateTargetTriggers(parsedSeconds);
-                }
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div class="input-group">
+                <label for="startTime">When exercise starts (MM:SS)</label>
+                <input type="text" id="startTime" value="00:00" placeholder="00:30">
+            </div>
+            <div class="input-group">
+                <label for="duration">Exercise Timer Length (Seconds)</label>
+                <input type="number" id="duration" value="45">
+            </div>
+        </div>
+
+        <button onclick="startWorkout()">Launch Workout</button>
+    </div>
+
+    <div class="video-container" id="videoWrapper">
+        <div id="player"></div>
+    </div>
+
+    <!-- YouTube Iframe API Loader -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <script>
+        let player;
+        let trackingInterval;
+        
+        // Trackers so the voice doesn't repeat within the same second
+        let triggered10 = false;
+        let triggered3 = false;
+        let triggered2 = false;
+        let triggered1 = false;
+
+        function convertToSeconds(timeStr) {
+            const parts = timeStr.split(':');
+            if (parts.length === 2) {
+                return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
             }
-        } catch (err) {
-            console.error("AI Reader Error: ", err);
-        } finally {
-            isOcrProcessing = false;
-        }
-    }
-
-    function evaluateTargetTriggers(seconds) {
-        // 1. Audio vocalization command at 10-second check
-        if (seconds === 10 && !triggered10) {
-            speak("Don't give up yet!");
-            triggered10 = true;
-        }
-        // 2. Linear standard 3 - 2 - 1 countdown execution
-        if (seconds === 3 && !triggered3) {
-            speak("3");
-            triggered3 = true;
-        }
-        if (seconds === 2 && !triggered2) {
-            speak("2");
-            triggered2 = true;
-        }
-        if (seconds === 1 && !triggered1) {
-            speak("1");
-            triggered1 = true;
+            return parseInt(timeStr, 10) || 0;
         }
 
-        // Reset variables instantly if user loops back to a high clock time
-        if (seconds > 11) {
+        function extractVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function speak(text) {
+            window.speechSynthesis.cancel(); // Clear old queues
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1; // Giving it some workout energy
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function startWorkout() {
+            const url = document.getElementById('videoUrl').value;
+            const id = extractVideoId(url);
+
+            if (!id) {
+                alert("Please enter a valid YouTube link!");
+                return;
+            }
+
+            document.getElementById('videoWrapper').style.display = 'block';
+            const startSec = convertToSeconds(document.getElementById('startTime').value);
+
+            if (player) {
+                player.loadVideoById({ videoId: id, startSeconds: startSec });
+                resetFlags();
+                return;
+            }
+
+            player = new YT.Player('player', {
+                videoId: id,
+                playerVars: { 'start': startSec, 'controls': 1, 'playsinline': 1 },
+                events: {
+                    'onReady': (e) => { e.target.mute(); e.target.playVideo(); },
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data == YT.PlayerState.PLAYING) {
+                clearInterval(trackingInterval);
+                trackingInterval = setInterval(checkTime, 200); // Check time 5 times a second
+            } else {
+                clearInterval(trackingInterval);
+            }
+        }
+
+        function checkTime() {
+            const currentTime = player.getCurrentTime();
+            const startSec = convertToSeconds(document.getElementById('startTime').value);
+            const totalDuration = parseInt(document.getElementById('duration').value, 10);
+
+            // Calculate exact seconds remaining on your exercise clock
+            const elapsedWorkoutTime = currentTime - startSec;
+            const secondsLeft = Math.ceil(totalDuration - elapsedWorkoutTime);
+
+            // Reset tags if you jump backward or restart
+            if (elapsedWorkoutTime < 1) resetFlags();
+
+            if (secondsLeft === 10 && !triggered10) {
+                speak("Don't give up yet!");
+                triggered10 = true;
+            }
+            if (secondsLeft === 3 && !triggered3) {
+                speak("3");
+                triggered3 = true;
+            }
+            if (secondsLeft === 2 && !triggered2) {
+                speak("2");
+                triggered2 = true;
+            }
+            if (secondsLeft === 1 && !triggered1) {
+                speak("1");
+                triggered1 = true;
+            }
+        }
+
+        function resetFlags() {
             triggered10 = false;
             triggered3 = false;
             triggered2 = false;
             triggered1 = false;
         }
-    }
-
-    // --- MOUSE DRAG & RESIZE RESCALE LOGIC FOR THE CROP LAYER ---
-    let isDragging = false, isResizing = false;
-    let startX, startY, startLeft, startTop, startWidth, startHeight;
-
-    cropBox.addEventListener('mousedown', (e) => {
-        const rect = cropBox.getBoundingClientRect();
-        // Check if cursor clicked close to the corner edge to evaluate resizing
-        if (e.clientX > rect.right - 15 && e.clientY > rect.bottom - 15) {
-            isResizing = true;
-        } else {
-            isDragging = true;
-        }
-        startX = e.clientX;
-        startY = e.clientY;
-        startLeft = cropBox.offsetLeft;
-        startTop = cropBox.offsetTop;
-        startWidth = cropBox.offsetWidth;
-        startHeight = cropBox.offsetHeight;
-        e.preventDefault();
-    });
-
-    window.addEventListener('mousemove', (e) => {
-        if (!isDragging && !isResizing) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-
-        if (isDragging) {
-            // Adjust box coordinates on dragging
-            cropBox.style.left = `${Math.max(0, Math.min(video.clientWidth - cropBox.offsetWidth, startLeft + dx))}px`;
-            cropBox.style.top = `${Math.max(0, Math.min(video.clientHeight - cropBox.offsetHeight, startTop + dy))}px`;
-        } else if (isResizing) {
-            // Expand box size parameters
-            cropBox.style.width = `${Math.max(40, startWidth + dx)}px`;
-            cropBox.style.height = `${Math.max(25, startHeight + dy)}px`;
-        }
-    });
-
-    window.addEventListener('mouseup', () => {
-        isDragging = false;
-        isResizing = false;
-    });
-</script>
-
+    </script>
 </body>
 </html>
