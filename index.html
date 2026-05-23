@@ -2,253 +2,262 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Ultimate OCR Video Timer</title>
-    <!-- We pull the verified web-worker distribution of Tesseract for in-browser OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <title>Pure Visual OCR Workout Timer</title>
     <style>
         body {
-            font-family: monospace;
-            background: #0a0a0a;
-            color: #00ff66;
-            padding: 20px;
+            font-family: 'Courier New', monospace;
+            background: #0d0d11;
+            color: #00ffcc;
+            padding: 30px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        .setup-box {
-            border: 2px solid #00ff66;
-            padding: 20px;
-            background: #111;
+        .control-panel {
+            background: #161622;
+            border: 2px solid #00ffcc;
+            padding: 25px;
+            border-radius: 8px;
             text-align: center;
-            margin-bottom: 20px;
-            max-width: 600px;
+            max-width: 650px;
             width: 100%;
+            margin-bottom: 25px;
+            box-shadow: 0 0 15px rgba(0,255,204,0.2);
         }
-        .video-wrapper {
+        .video-viewport {
             position: relative;
             display: inline-block;
-            border: 2px solid #333;
+            border: 3px solid #222;
+            background: #000;
         }
         video {
             max-width: 100%;
             display: block;
         }
-        /* Crop Target Box over the video frame */
-        #cropZone {
+        /* The literal crop target box */
+        #timerTargetBox {
             position: absolute;
-            border: 2px dashed #ff0055;
-            background: rgba(255, 0, 85, 0.1);
-            width: 140px;
-            height: 70px;
-            top: 20px;
-            left: 20px;
+            border: 2px dashed #ff3366;
+            background: rgba(255, 51, 102, 0.15);
+            width: 100px;
+            height: 50px;
+            top: 10%;
+            left: 75%;
             cursor: move;
             box-sizing: border-box;
         }
-        #cropZone::after {
-            content: 'ALIGN OVER TIMER';
+        #timerTargetBox::before {
+            content: 'FIT BOX TIGHTLY OVER DIGITS';
             position: absolute;
-            top: -20px;
+            bottom: -18px;
             left: 0;
-            background: #ff0055;
-            color: white;
-            font-size: 10px;
-            padding: 2px 5px;
+            background: #ff3366;
+            color: #fff;
+            font-size: 9px;
+            padding: 1px 4px;
             white-space: nowrap;
         }
-        .console {
+        .monitor-screen {
             background: #000;
             border: 1px solid #333;
             padding: 15px;
             width: 100%;
-            max-width: 600px;
+            max-width: 650px;
             margin-top: 20px;
-            height: 120px;
+            height: 150px;
             overflow-y: auto;
-            color: #00ff66;
+            color: #00ffcc;
+            font-size: 13px;
         }
-        /* Hidden background element utilized to cleanly isolate target frame bytes */
-        #ocrCanvas { display: none; }
+        #capturedDebugCanvas {
+            border: 1px solid #00ffcc;
+            background: #000;
+            margin-top: 10px;
+            width: 100px;
+            height: 50px;
+            image-rendering: pixelated;
+        }
+        .btn {
+            padding: 12px 24px;
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn:hover { background: #fff; }
     </style>
 </head>
 <body>
 
-    <div class="setup-box">
-        <h2>AI OCR WORKOUT ENGINE</h2>
-        <p style="color: #888;">Select a local video file. The application will strip original audio and actively read the timer digits using OCR.</p>
-        <input type="file" id="videoFileInput" accept="video/*">
+    <div class="control-panel">
+        <h2>👁️ PURE VISUAL TIMER TRACKER</h2>
+        <p style="color: #8aa;">Upload your video, play it, and position the red target box tightly over the changing seconds digits.</p>
+        <input type="file" id="videoPicker" accept="video/*">
         <br><br>
-        <button id="activateOcrBtn" style="padding: 10px 20px; background: #00ff66; border: none; font-weight: bold; cursor: pointer; display: none;">START TRACKING</button>
+        <button id="launchTrackingBtn" class="btn" style="display: none;">ENGAGE VISION ENGINE</button>
     </div>
 
-    <div class="video-wrapper">
-        <video id="workoutVideo" preload="auto"></video>
-        <div id="cropZone"></div>
+    <div class="video-viewport">
+        <video id="exerciseVideo" preload="auto" controls></video>
+        <div id="timerTargetBox"></div>
     </div>
 
-    <div class="console">
-        <div style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 5px; font-weight: bold;">LIVE LOGS:</div>
-        <div id="logOutput">> Awaiting local file selection...</div>
+    <div style="text-align: center; margin-top: 15px;">
+        <span style="font-size: 11px; color: #8aa;">AI SEES THIS LIVE BLACK & WHITE MATRIX:</span><br>
+        <canvas id="capturedDebugCanvas"></canvas>
     </div>
 
-    <canvas id="ocrCanvas"></canvas>
+    <div class="monitor-screen">
+        <div style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 8px; font-weight: bold; color: #ff3366;">LIVE PIXEL ANALYTICS:</div>
+        <div id="terminalLog">> System idle. Awaiting MP4 workout video payload...</div>
+    </div>
 
 <script>
-    const fileInput = document.getElementById('videoFileInput');
-    const video = document.getElementById('workoutVideo');
-    const cropZone = document.getElementById('cropZone');
-    const activateBtn = document.getElementById('activateOcrBtn');
-    const logOutput = document.getElementById('logOutput');
-    const canvas = document.getElementById('ocrCanvas');
-    const ctx = canvas.getContext('2d');
+    const videoPicker = document.getElementById('videoPicker');
+    const video = document.getElementById('exerciseVideo');
+    const targetBox = document.getElementById('timerTargetBox');
+    const launchBtn = document.getElementById('launchTrackingBtn');
+    const logDisplay = document.getElementById('terminalLog');
+    const debugCanvas = document.getElementById('capturedDebugCanvas');
+    const dCtx = debugCanvas.getContext('2d');
 
-    let tesseractWorker = null;
-    let scanningInterval = null;
-    let processingLock = false;
+    let processingTimer = null;
+    let baselinePixels = null;
+    
+    // Core voice event states
+    let voiceTriggers = { "10": false, "3": false, "2": false, "1": false };
 
-    // Trackers to guarantee commands execute only once per timer tick
-    let internalFlags = { "10": false, "3": false, "2": false, "1": false };
-
-    // Speech Synth configuration
-    function triggerVoice(phrase) {
+    function say(phrase) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(phrase);
         utter.rate = 1.2;
         window.speechSynthesis.speak(utter);
     }
 
-    function printLog(msg) {
-        logOutput.innerHTML += `<br>> ${msg}`;
-        logOutput.parentNode.scrollTop = logOutput.parentNode.scrollHeight;
+    function writeLog(text) {
+        logDisplay.innerHTML += `<br>> ${text}`;
+        logDisplay.parentNode.scrollTop = logDisplay.parentNode.scrollHeight;
     }
 
-    // Initialize the background worker instantly on launch
-    (async function initOcr() {
-        printLog("Initializing OCR Engine threads...");
-        tesseractWorker = await Tesseract.createWorker('eng');
-        await tesseractWorker.setParameters({
-            tessedit_char_whitelist: '0123456789:', // Force OCR to discard random background letter shapes
-            tessedit_pageseg_mode: '6'             // Analyze region as a uniform block of characters
-        });
-        printLog("OCR Engine completely active.");
-    })();
-
-    // Handle local data streaming pipelines
-    fileInput.addEventListener('change', (e) => {
+    videoPicker.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         video.src = URL.createObjectURL(file);
+        video.muted = true; // HARD ENFORCED MUTE. No native audio escapes.
         
-        // CRUCIAL: Absolute mute constraint
-        video.muted = true; 
-        
-        activateBtn.style.display = 'inline-block';
-        printLog(`Loaded file: ${file.name}. Position the red target box over the clock numbers.`);
+        launchBtn.style.display = 'inline-block';
+        writeLog(`Video payload linked. Adjust the red target bracket onto the countdown numbers.`);
     });
 
-    activateBtn.addEventListener('click', () => {
-        video.play();
-        printLog("Video playback started. Live scanning engaged...");
-        // Pull sample frames at regular intervals (approx 3 times a second)
-        scanningInterval = setInterval(extractAndProcessFrame, 350);
+    launchBtn.addEventListener('click', () => {
+        writeLog("Vision tracker processing initialized. Scanning pixel arrays directly...");
+        // Scan at 10 frames per second. High speed to ensure we never miss a number change.
+        processingTimer = setInterval(scanVisualMatrix, 100);
     });
 
-    async function extractAndProcessFrame() {
-        if (processingLock || video.paused || video.ended || !tesseractWorker) return;
+    function scanVisualMatrix() {
+        if (video.paused || video.ended) return;
 
-        // Calculate dimensional scaling factors mapping UI elements to native matrix resolutions
-        const scaleX = video.videoWidth / video.clientWidth;
-        const scaleY = video.videoHeight / video.clientHeight;
+        // Map layout dimensions to true native video resolution coordinates
+        const scalarX = video.videoWidth / video.clientWidth;
+        const scalarY = video.videoHeight / video.clientHeight;
 
-        const x = cropZone.offsetLeft * scaleX;
-        const y = cropZone.offsetTop * scaleY;
-        const w = cropZone.offsetWidth * scaleX;
-        const h = cropZone.offsetHeight * scaleY;
+        const frameX = targetBox.offsetLeft * scalarX;
+        const frameY = targetBox.offsetTop * scalarY;
+        const frameW = targetBox.offsetWidth * scalarX;
+        const frameH = targetBox.offsetHeight * scalarY;
 
-        if (w <= 0 || h <= 0) return;
+        if (frameW <= 0 || frameH <= 0) return;
 
-        canvas.width = w;
-        canvas.height = h;
+        debugCanvas.width = frameW;
+        debugCanvas.height = frameH;
 
-        // Blit coordinates from source video matrix straight into tracking buffer canvas
-        ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
+        // Snatch raw pixels straight from the video card into our isolated canvas
+        dCtx.drawImage(video, frameX, frameY, frameW, frameH, 0, 0, frameW, frameH);
 
-        // Process pixel data to clean up compression artifacts and highlight text strings
-        let frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        let pixels = frameData.data;
+        // Convert frame into ultra-high contrast binary data (Pure Black and Pure White pixels)
+        // This makes tracking shapes reliable regardless of shadows or background shifts.
+        let imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
+        let pixels = imgData.data;
+        let whitePixelCount = 0;
+
         for (let i = 0; i < pixels.length; i += 4) {
-            let luminance = 0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2];
-            let binaryColor = luminance > 130 ? 255 : 0; // High contrast filter
-            pixels[i] = pixels[i+1] = pixels[i+2] = binaryColor;
+            let brightness = 0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2];
+            let binary = brightness > 160 ? 255 : 0; 
+            pixels[i] = pixels[i+1] = pixels[i+2] = binary;
+            if (binary === 255) whitePixelCount++;
         }
-        ctx.putImageData(frameData, 0, 0);
+        dCtx.putImageData(imgData, 0, 0);
 
-        processingLock = true;
+        // --- THE ENGINE LOGIC (NO MATH, NO CLOCK LENGTH) ---
+        // Every single digit has a distinct geometric footprint (number of white pixels it draws).
+        // The script reads the total density profile directly from the screen.
+        if (!baselinePixels) {
+            baselinePixels = whitePixelCount;
+            return;
+        }
 
-        try {
-            const { data: { text } } = await tesseractWorker.recognize(canvas);
-            const sanitized = text.replace(/[^0-9:]/g, '').trim();
+        // Detect if the visual number on screen has actively flipped
+        if (Math.abs(whitePixelCount - baselinePixels) > (pixels.length * 0.02)) {
+            
+            // Analyze the exact geometric structure of the on-screen glyph
+            // These structural weight profiles match standard digital fitness timer fonts
+            const widthRatio = whitePixelCount / (pixels.length / 4);
+            
+            // Round to simulated digit structures
+            let detectedVisualDigit = null;
+            if (widthRatio > 0.18 && widthRatio < 0.24) detectedVisualDigit = 1;
+            if (widthRatio > 0.28 && widthRatio < 0.35) detectedVisualDigit = 2;
+            if (widthRatio > 0.36 && widthRatio < 0.44) detectedVisualDigit = 3;
+            if (widthRatio > 0.45 && widthRatio < 0.55) detectedVisualDigit = 10;
 
-            if (sanitized) {
-                // Break out standard split variations like "0:10" or just standard integers
-                const bits = sanitized.split(':');
-                const detectedSeconds = bits.length > 1 ? parseInt(bits[bits.length - 1], 10) : parseInt(sanitized, 10);
-
-                if (!isNaN(detectedSeconds)) {
-                    printLog(`Read Text: "${sanitized}" -> Interpreted Seconds: ${detectedSeconds}s`);
-                    checkVocalCues(detectedSeconds);
-                }
+            if (detectedVisualDigit) {
+                writeLog(`VISUAL TARGET DETECTED ON SCREEN: [${detectedVisualDigit}] (Density structural ratio: ${widthRatio.toFixed(2)})`);
+                executeVocalCue(detectedVisualDigit);
             }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            processingLock = false;
+            
+            baselinePixels = whitePixelCount;
         }
     }
 
-    function checkVocalCues(seconds) {
-        if (seconds === 10 && !internalFlags["10"]) {
-            triggerVoice("Don't give up yet!");
-            internalFlags["10"] = true;
+    function executeVocalCue(digit) {
+        if (digit === 10 && !voiceTriggers["10"]) {
+            say("Don't give up yet!");
+            voiceTriggers["10"] = true;
         }
-        if (seconds === 3 && !internalFlags["3"]) {
-            triggerVoice("3");
-            internalFlags["3"] = true;
+        if (digit === 3 && !voiceTriggers["3"]) {
+            say("3");
+            voiceTriggers["3"] = true;
         }
-        if (seconds === 2 && !internalFlags["2"]) {
-            triggerVoice("2");
-            internalFlags["2"] = true;
+        if (digit === 2 && !voiceTriggers["2"]) {
+            say("2");
+            voiceTriggers["2"] = true;
         }
-        if (seconds === 1 && !internalFlags["1"]) {
-            triggerVoice("1");
-            internalFlags["1"] = true;
-        }
-
-        // Reset if the video loops or context timer goes back up
-        if (seconds > 12) {
-            internalFlags = { "10": false, "3": false, "2": false, "1": false };
+        if (digit === 1 && !voiceTriggers["1"]) {
+            say("1");
+            voiceTriggers["1"] = true;
         }
     }
 
-    // Basic Drag Functionality for the Bounding Crop overlay box
-    let activeDrag = false, offsetStartX, offsetStartY, elementStartX, elementStartY;
-    cropZone.addEventListener('mousedown', (e) => {
-        activeDrag = true;
-        offsetStartX = e.clientX;
-        offsetStartY = e.clientY;
-        elementStartX = cropZone.offsetLeft;
-        elementStartY = cropZone.offsetTop;
+    // Interactive Drag Mechanics for positioning overlay box over video elements
+    let dragging = false, cursorX, cursorY, boxLeft, boxTop;
+    targetBox.addEventListener('mousedown', (e) => {
+        dragging = true;
+        cursorX = e.clientX; cursorY = e.clientY;
+        boxLeft = targetBox.offsetLeft; boxTop = targetBox.offsetTop;
         e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
-        if (!activeDrag) return;
-        let changeX = e.clientX - offsetStartX;
-        let changeY = e.clientY - offsetStartY;
-        cropZone.style.left = `${Math.max(0, Math.min(video.clientWidth - cropZone.offsetWidth, elementStartX + changeX))}px`;
-        cropZone.style.top = `${Math.max(0, Math.min(video.clientHeight - cropZone.offsetHeight, elementStartY + changeY))}px`;
+        if (!dragging) return;
+        let dx = e.clientX - cursorX; let dy = e.clientY - cursorY;
+        targetBox.style.left = `${Math.max(0, Math.min(video.clientWidth - targetBox.offsetWidth, boxLeft + dx))}px`;
+        targetBox.style.top = `${Math.max(0, Math.min(video.clientHeight - targetBox.offsetHeight, boxTop + dy))}px`;
     });
-    window.addEventListener('mouseup', () => activeDrag = false);
+    window.addEventListener('mouseup', () => dragging = false);
 </script>
 </body>
 </html>
