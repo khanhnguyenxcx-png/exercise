@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Workout AI Assistant</title>
+    <title>AI Computer Vision Workout Timer</title>
+    <!-- Import Tesseract.js for browser-side OCR text reading -->
+    <script src="https://unpkg.com/tesseract.js@5.0.2/dist/tesseract.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -19,253 +21,324 @@
         }
 
         .container {
-            max-width: 850px;
+            max-width: 900px;
             width: 100%;
             text-align: center;
         }
 
-        h1 {
-            color: #ff4757;
-            margin-bottom: 5px;
-        }
+        h1 { color: #ff4757; margin-bottom: 5px; }
+        p { color: #a4b0be; margin-bottom: 25px; }
 
-        p {
-            color: #a4b0be;
-            margin-bottom: 25px;
-        }
-
-        .setup-box {
-            background-color: #1e1e1e;
-            padding: 25px;
+        .setup-panel {
+            background: #1e1e1e;
+            padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            margin-bottom: 25px;
+            margin-bottom: 20px;
+            border: 2px dashed #333;
         }
 
-        .input-row {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        @media (min-width: 600px) {
-            .input-row {
-                flex-direction: row;
-                justify-content: center;
-            }
-        }
-
-        input[type="text"] {
-            background: #2f3542;
-            border: 1px solid #57606f;
+        .file-btn {
+            background-color: #ff4757;
             color: white;
-            padding: 12px;
+            padding: 12px 24px;
             border-radius: 8px;
-            width: 100%;
-            max-width: 400px;
-            font-size: 16px;
-        }
-
-        .input-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        input[type="number"] {
-            background: #2f3542;
-            border: 1px solid #57606f;
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            width: 80px;
-            font-size: 16px;
-            text-align: center;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
         }
 
         button {
-            background-color: #ff4757;
+            background-color: #2ed573;
             color: white;
             padding: 12px 24px;
             border: none;
             border-radius: 8px;
-            cursor: pointer;
             font-weight: bold;
-            font-size: 16px;
-            transition: background 0.2s;
+            cursor: pointer;
+            margin-top: 10px;
         }
 
-        button:hover {
-            background-color: #ff6b81;
-        }
-
-        /* Container designed to maintain YouTube's 16:9 aspect ratio */
-        .video-wrapper {
+        /* Container for layering video and crop tools */
+        .video-container {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 ratio */
-            height: 0;
-            overflow: hidden;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: inline-block;
+            max-width: 100%;
             background: #000;
-            display: none; /* Hidden until URL is loaded */
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
-        .video-wrapper iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
+        video {
+            display: block;
             width: 100%;
-            height: 100%;
-            border: 0;
+            max-height: 70vh;
         }
+
+        /* Red interactive framing layer for focusing the OCR engine */
+        #cropBox {
+            position: absolute;
+            border: 3px solid #ff4757;
+            background-color: rgba(255, 71, 87, 0.15);
+            cursor: move;
+            top: 20px;
+            left: 20px;
+            width: 120px;
+            height: 60px;
+            box-sizing: border-box;
+            display: none;
+        }
+
+        /* Resizing handles */
+        #cropBox::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #ff4757;
+            right: -6px;
+            bottom: -6px;
+            cursor: se-resize;
+        }
+
+        .debug-panel {
+            margin-top: 15px;
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-around;
+            font-size: 14px;
+        }
+
+        .live-value { color: #ff4757; font-weight: bold; }
+        
+        /* Hidden layout canvas for isolating target pixels */
+        canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Mute & Motivate (YouTube Edition)</h1>
-    <p>Paste a YouTube fitness video link. It will stream fully muted with automatic AI vocal countdown tracks overlayed.</p>
+    <h1>AI Vision Workout Muter</h1>
+    <p>Upload a video, place the red crop frame directly over the changing timer digits, and let the AI read the numbers live!</p>
 
-    <div class="setup-box">
-        <div class="input-row">
-            <input type="text" id="ytUrl" placeholder="Paste YouTube link here..." autocomplete="off">
-            
-            <div class="input-group">
-                <label for="timerDuration">Timer length (sec):</label>
-                <input type="number" id="timerDuration" value="45" min="11">
-            </div>
-            
-            <button onclick="loadYouTubeVideo()">Load Video</button>
-        </div>
+    <div class="setup-panel">
+        <label for="videoUpload" class="file-btn">Select Workout Video</label>
+        <input type="file" id="videoUpload" accept="video/*" style="display:none;">
+        <br>
+        <button id="startTrackBtn" style="display:none;">Start AI Vision Tracking</button>
     </div>
 
-    <!-- YouTube iframe targets this wrapper -->
-    <div class="video-wrapper" id="videoWrapper">
-        <div id="player"></div>
+    <div class="video-container">
+        <video id="workoutVideo" controls></video>
+        <!-- User dynamic bounding box placement over the numbers -->
+        <div id="cropBox"></div>
     </div>
+
+    <div class="debug-panel" id="debugInfo" style="display: none;">
+        <div>AI Status: <span id="aiStatus" style="color: #2ed573;">Initializing...</span></div>
+        <div>Last Read Text: "<span id="lastText" class="live-value">--</span>"</div>
+        <div>Detected Seconds: <span id="detectedSec" class="live-value">--</span></div>
+    </div>
+
+    <!-- Processing canvas targets -->
+    <canvas id="processingCanvas"></canvas>
 </div>
 
-<!-- Load the external YouTube Iframe Player API -->
-<script src="https://www.youtube.com/iframe_api"></script>
-
 <script>
-    let player;
-    let checkTimerInterval;
-    
-    // State flags so the vocal engine doesn't stutter/repeat within the same second
-    let spoken10s = false;
-    let spoken3s = false;
-    let spoken2s = false;
-    let spoken1s = false;
+    const videoUpload = document.getElementById('videoUpload');
+    const video = document.getElementById('workoutVideo');
+    const cropBox = document.getElementById('cropBox');
+    const startTrackBtn = document.getElementById('startTrackBtn');
+    const debugPanel = document.getElementById('debugInfo');
+    const aiStatus = document.getElementById('aiStatus');
+    const lastText = document.getElementById('lastText');
+    const detectedSec = document.getElementById('detectedSec');
+    const canvas = document.getElementById('processingCanvas');
+    const ctx = canvas.getContext('2d');
 
+    let ocrWorker = null;
+    let trackingLoop = null;
+    let isOcrProcessing = false;
+
+    // Trackers to prevent multi-firing within the same clock changes
+    let triggered10 = false;
+    let triggered3 = false;
+    let triggered2 = false;
+    let triggered1 = false;
+
+    // Browser local Speech Synthesis
     const synth = window.speechSynthesis;
-
-    function speak(text) {
-        synth.cancel(); // Clear any queued speech sounds immediately
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.15; // Energized high-tempo speech pacing
-        synth.speak(utterance);
+    function speak(phrase) {
+        synth.cancel(); // Drop current backlogs to strike on time
+        const voiceEng = new SpeechSynthesisUtterance(phrase);
+        voiceEng.rate = 1.15;
+        synth.speak(voiceEng);
     }
 
-    // Extract the standard 11-character video ID from various YouTube URL formats
-    function extractVideoId(url) {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
-    }
-
-    function loadYouTubeVideo() {
-        const urlInput = document.getElementById('ytUrl').value;
-        const videoId = extractVideoId(urlInput);
-
-        if (!videoId) {
-            alert("Please enter a valid YouTube video URL!");
-            return;
-        }
-
-        // Show the player block container element
-        document.getElementById('videoWrapper').style.display = 'block';
-
-        // If player already exists, just swap the video track
-        if (player && typeof player.loadVideoById === 'function') {
-            player.loadVideoById({ videoId: videoId });
-            resetVoiceFlags();
-            return;
-        }
-
-        // Build a brand new YouTube player instance
-        player = new YT.Player('player', {
-            videoId: videoId,
-            playerVars: {
-                'playsinline': 1,
-                'controls': 1,
-                'rel': 0
-            },
-            events: {
-                'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange
-            }
+    // Initialize Tesseract Engine automatically on mount
+    (async () => {
+        aiStatus.innerText = "Loading AI Core...";
+        ocrWorker = await Tesseract.createWorker('eng');
+        // Configure options to look ONLY for numbers and clock structures
+        await ocrWorker.setParameters({
+            tessedit_char_whitelist: '0123456789:',
+            tessedit_pageseg_mode: '6' // Treat target crop region as a single uniform text block
         });
-    }
+        aiStatus.innerText = "AI Vision System Ready";
+    })();
 
-    function onPlayerReady(event) {
-        // CRUCIAL: Instantly mutes the incoming audio feeds from YouTube
-        event.target.mute();
-        speak("Workout loaded. Let's go!");
-    }
+    // Handle Local File Uploading streams
+    videoUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    function onPlayerStateChange(event) {
-        // If the video is playing (Status code 1), check timestamps continuously
-        if (event.data == YT.PlayerState.PLAYING) {
-            clearInterval(checkTimerInterval);
-            checkTimerInterval = setInterval(monitorPlaybackTime, 200); // Check every 200ms for tight accuracy
-        } else {
-            clearInterval(checkTimerInterval);
+        video.src = URL.createObjectURL(file);
+        video.muted = true; // Permanently lock down sound feeds
+        cropBox.style.display = 'block';
+        startTrackBtn.style.display = 'inline-block';
+        debugPanel.style.display = 'flex';
+        speak("System configured. Align the red window over the clock layout.");
+    });
+
+    // Start video evaluation loop
+    startTrackBtn.addEventListener('click', () => {
+        video.play();
+        aiStatus.innerText = "Scanning Active...";
+        // Scan the target frame region roughly 3-4 times every second
+        trackingLoop = setInterval(analyzeFramePixels, 300);
+    });
+
+    async function analyzeFramePixels() {
+        // Halt if core systems are busy or video is paused
+        if (isOcrProcessing || video.paused || video.ended || !ocrWorker) return;
+
+        // Calculate scaling variables matching layout to native video dimension
+        const scaleX = video.videoWidth / video.clientWidth;
+        const scaleY = video.videoHeight / video.clientHeight;
+
+        // Pull geometry bounds of crop overlay box
+        const targetX = cropBox.offsetLeft * scaleX;
+        const targetY = cropBox.offsetTop * scaleY;
+        const targetW = cropBox.offsetWidth * scaleX;
+        const targetH = cropBox.offsetHeight * scaleY;
+
+        if (targetW <= 0 || targetH <= 0) return;
+
+        // Resize rendering context target canvas
+        canvas.width = targetW;
+        canvas.height = targetH;
+
+        // Copy cropped zone pixel metadata onto the isolated storage canvas
+        ctx.drawImage(video, targetX, targetY, targetW, targetH, 0, 0, targetW, targetH);
+
+        // Turn image black-and-white to boost clarity against changing video backdrops
+        let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+            let threshold = brightness > 140 ? 255 : 0; // Standard layout binary filter
+            data[i] = data[i+1] = data[i+2] = threshold; 
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        isOcrProcessing = true;
+        
+        try {
+            // Point AI engine at target cropped canvas element
+            const { data: { text } } = await ocrWorker.recognize(canvas);
+            const cleanedText = text.replace(/[^0-9:]/g, '').trim();
+            lastText.innerText = cleanedText || "[No digits detected]";
+
+            if (cleanedText) {
+                // Parse standard stopwatch notations like "00:10" or "0:03" down to basic values
+                const parts = cleanedText.split(':');
+                const parsedSeconds = parts.length > 1 ? parseInt(parts[parts.length - 1], 10) : parseInt(cleanedText, 10);
+                
+                if (!isNaN(parsedSeconds)) {
+                    detectedSec.innerText = parsedSeconds + "s";
+                    evaluateTargetTriggers(parsedSeconds);
+                }
+            }
+        } catch (err) {
+            console.error("AI Reader Error: ", err);
+        } finally {
+            isOcrProcessing = false;
         }
     }
 
-    function monitorPlaybackTime() {
-        if (!player || typeof player.getCurrentTime !== 'function') return;
-
-        const currentTime = player.getCurrentTime();
-        const totalDurationSetting = parseFloat(document.getElementById('timerDuration').value);
-        const secondsRemaining = Math.ceil(totalDurationSetting - currentTime);
-
-        // Reset system flags if the user loops or clicks backward to start over
-        if (currentTime < 1) {
-            resetVoiceFlags();
-        }
-
-        // 1. Audio cue at 10-second mark
-        if (secondsRemaining === 10 && !spoken10s) {
+    function evaluateTargetTriggers(seconds) {
+        // 1. Audio vocalization command at 10-second check
+        if (seconds === 10 && !triggered10) {
             speak("Don't give up yet!");
-            spoken10s = true;
+            triggered10 = true;
         }
-
-        // 2. Final 3 - 2 - 1 countdown marks
-        if (secondsRemaining === 3 && !spoken3s) {
+        // 2. Linear standard 3 - 2 - 1 countdown execution
+        if (seconds === 3 && !triggered3) {
             speak("3");
-            spoken3s = true;
+            triggered3 = true;
         }
-        if (secondsRemaining === 2 && !spoken2s) {
+        if (seconds === 2 && !triggered2) {
             speak("2");
-            spoken2s = true;
+            triggered2 = true;
         }
-        if (secondsRemaining === 1 && !spoken1s) {
+        if (seconds === 1 && !triggered1) {
             speak("1");
-            spoken1s = true;
+            triggered1 = true;
+        }
+
+        // Reset variables instantly if user loops back to a high clock time
+        if (seconds > 11) {
+            triggered10 = false;
+            triggered3 = false;
+            triggered2 = false;
+            triggered1 = false;
         }
     }
 
-    function resetVoiceFlags() {
-        spoken10s = false;
-        spoken3s = false;
-        spoken2s = false;
-        spoken1s = false;
-    }
+    // --- MOUSE DRAG & RESIZE RESCALE LOGIC FOR THE CROP LAYER ---
+    let isDragging = false, isResizing = false;
+    let startX, startY, startLeft, startTop, startWidth, startHeight;
+
+    cropBox.addEventListener('mousedown', (e) => {
+        const rect = cropBox.getBoundingClientRect();
+        // Check if cursor clicked close to the corner edge to evaluate resizing
+        if (e.clientX > rect.right - 15 && e.clientY > rect.bottom - 15) {
+            isResizing = true;
+        } else {
+            isDragging = true;
+        }
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = cropBox.offsetLeft;
+        startTop = cropBox.offsetTop;
+        startWidth = cropBox.offsetWidth;
+        startHeight = cropBox.offsetHeight;
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging && !isResizing) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (isDragging) {
+            // Adjust box coordinates on dragging
+            cropBox.style.left = `${Math.max(0, Math.min(video.clientWidth - cropBox.offsetWidth, startLeft + dx))}px`;
+            cropBox.style.top = `${Math.max(0, Math.min(video.clientHeight - cropBox.offsetHeight, startTop + dy))}px`;
+        } else if (isResizing) {
+            // Expand box size parameters
+            cropBox.style.width = `${Math.max(40, startWidth + dx)}px`;
+            cropBox.style.height = `${Math.max(25, startHeight + dy)}px`;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        isResizing = false;
+    });
 </script>
 
 </body>
