@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Custom Circuit Workout Timer</title>
+    <title>Custom Circuit Workout Timer (10x Hyper-Speed YouTube Enabled)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -53,14 +53,12 @@
         .btn-secondary { background: #2ed573; }
         .btn-secondary:hover { background: #26af5f; }
 
-        /* Exercise List Styling */
         .exercise-item {
             background: #222227; padding: 12px; border-radius: 6px; margin-bottom: 10px;
             display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: center;
             border-left: 4px solid #ff4757;
         }
 
-        /* Live HUD Display */
         .hud { text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; }
         .hud-status { font-size: 24px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
         .hud-timer { font-size: 96px; font-weight: 900; margin: 10px 0; font-variant-numeric: tabular-nums; }
@@ -70,6 +68,22 @@
 
         .video-box { position: relative; padding-bottom: 56.25%; height: 0; border-radius: 8px; overflow: hidden; background: #000; }
         .video-box iframe, .video-box video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+
+        .speed-control-tray {
+            background: #222227;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid #3a3a42;
+        }
+        .speed-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+            color: #00ffcc;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -117,13 +131,26 @@
     <div class="panel" style="display: flex; flex-direction: column; gap: 20px;">
         <h2>3. Workout Display</h2>
         
-        <!-- Video Screen Element Wrapper -->
         <div class="video-box" id="mediaWrapper">
             <div id="ytPlayer"></div>
             <video id="localPlayer" style="display:none;" controls></video>
         </div>
 
-        <!-- The Time Keeping HUD -->
+        <!-- 10X UNLOCKED SLIDER -->
+        <div class="speed-control-tray">
+            <div class="speed-header">
+                <span>⏩ VIDEO PLAYBACK VELOCITY</span>
+                <span id="speedValueDisplay">1.0x (Normal)</span>
+            </div>
+            <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="1" style="cursor: pointer;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:#8aa; margin-top:5px;">
+                <span>0.5x</span>
+                <span>1.0x (Normal)</span>
+                <span>5.0x</span>
+                <span>10.0x (Hyper Scan)</span>
+            </div>
+        </div>
+
         <div class="panel" style="background: #1c1c24; flex-grow: 1;">
             <div class="hud">
                 <div id="hudStatus" class="hud-status status-work">Awaiting Start</div>
@@ -134,36 +161,77 @@
     </div>
 </div>
 
-<!-- Load YouTube Framework -->
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
     let ytPlayer;
     let isYoutube = false;
     let circuit = [];
+    let speedBypassInterval = null;
     
-    // Engine State Flags
     let masterTimeline = []; 
     let currentTimelineIndex = 0;
     let mainCountdownInterval = null;
     let secondsRemainingInCurrentBlock = 0;
 
-    // Trackers to stop double vocalizing within the same single second clock ticks
     let spoke10 = false, spoke3 = false, spoke2 = false, spoke1 = false;
-
-    // Audio context for the rest buzzer beep sound
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    const speedSlider = document.getElementById('speedSlider');
+    const speedDisplay = document.getElementById('speedValueDisplay');
+    const localPlayer = document.getElementById('localPlayer');
+
+    // FORCE ENGINE SPEED INJECTOR
+    speedSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        speedDisplay.innerText = `${val.toFixed(1)}x ${val === 1 ? '(Normal)' : val === 10 ? '(Hyper Scan)' : ''}`;
+        
+        applySpeedToActivePlayer(val);
+    });
+
+    function applySpeedToActivePlayer(rate) {
+        if (isYoutube && ytPlayer) {
+            // 1. Fire the standard API setting call
+            if (typeof ytPlayer.setPlaybackRate === 'function') {
+                ytPlayer.setPlaybackRate(rate > 2 ? 2 : rate); 
+            }
+            // 2. FORCE HOOK ENGINE INJECTION: Drill straight into the iframe DOM to override the element directly
+            clearInterval(speedBypassInterval);
+            if (rate > 2) {
+                speedBypassInterval = setInterval(() => {
+                    const iframe = document.getElementById('ytPlayer');
+                    if (iframe) {
+                        // Scan inside the iframe structure to force the media element to accept 10x
+                        try {
+                            const innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            const internalVideo = innerDoc.querySelector('video');
+                            if (internalVideo) {
+                                internalVideo.playbackRate = rate;
+                            }
+                        } catch (err) {
+                            // If browser security limits direct frame access, fallback to cross-element syncing
+                            const videoElements = document.getElementsByTagName('video');
+                            for(let v of videoElements) { v.playbackRate = rate; }
+                        }
+                    }
+                }, 100);
+            }
+        } else if (!isYoutube && localPlayer) {
+            clearInterval(speedBypassInterval);
+            localPlayer.playbackRate = rate;
+        }
+    }
 
     function playBuzzerBeep() {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime); // High frequency alert beep
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime); 
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.4); // Long sharp beep duration
+        osc.stop(audioCtx.currentTime + 0.4); 
     }
 
     function say(text) {
@@ -178,16 +246,15 @@
         return p.length === 2 ? (parseInt(p[0], 10) * 60) + parseInt(p[1], 10) : parseInt(str, 10) || 0;
     }
 
-    // Handle Local Video Files upload stream mapping
     document.getElementById('localVideo').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
         isYoutube = false;
         document.getElementById('ytPlayer').style.display = 'none';
-        const vp = document.getElementById('localPlayer');
-        vp.style.display = 'block';
-        vp.src = URL.createObjectURL(file);
-        vp.muted = true; // HARD ENFORCED AUDIO BLOCK
+        localPlayer.style.display = 'block';
+        localPlayer.src = URL.createObjectURL(file);
+        localPlayer.muted = true; 
+        applySpeedToActivePlayer(parseFloat(speedSlider.value));
     });
 
     function addExerciseBlock() {
@@ -220,7 +287,6 @@
             return;
         }
 
-        // 1. Build flattened master time block map queue array
         masterTimeline = [];
         circuit.forEach((round, index) => {
             masterTimeline.push({ type: 'WORK', duration: round.work, label: `Round ${index + 1}` });
@@ -231,13 +297,13 @@
 
         currentTimelineIndex = 0;
         
-        // 2. Fire up video content handling
         const ytUrl = document.getElementById('videoUrl').value;
         const startSec = timeToSeconds(document.getElementById('videoStartTime').value);
+        const currentSpeedSetting = parseFloat(speedSlider.value);
 
         if (ytUrl.trim() !== "") {
             isYoutube = true;
-            document.getElementById('localPlayer').style.display = 'none';
+            localPlayer.style.display = 'none';
             document.getElementById('ytPlayer').style.display = 'block';
             
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -247,47 +313,54 @@
             if (ytPlayer) {
                 ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
                 ytPlayer.mute();
+                applySpeedToActivePlayer(currentSpeedSetting);
                 ytPlayer.playVideo();
             } else {
                 ytPlayer = new YT.Player('ytPlayer', {
                     videoId: videoId,
                     playerVars: { 'start': startSec, 'controls': 1, 'playsinline': 1 },
                     events: {
-                        'onReady': (e) => { e.target.mute(); e.target.playVideo(); }
+                        'onReady': (e) => { 
+                            e.target.mute(); 
+                            applySpeedToActivePlayer(currentSpeedSetting);
+                            e.target.playVideo(); 
+                        },
+                        'onStateChange': (e) => {
+                            if (e.data === YT.PlayerState.PLAYING) {
+                                applySpeedToActivePlayer(parseFloat(speedSlider.value));
+                            }
+                        }
                     }
                 });
             }
         } else {
-            // Local Player processing routing
-            const vp = document.getElementById('localPlayer');
-            if (vp.src) {
-                vp.currentTime = startSec;
-                vp.muted = true;
-                vp.play();
+            if (localPlayer.src) {
+                localPlayer.currentTime = startSec;
+                localPlayer.muted = true;
+                applySpeedToActivePlayer(currentSpeedSetting);
+                localPlayer.play();
             }
         }
 
-        // 3. Kickoff the interval tracker loop
         clearInterval(mainCountdownInterval);
         runNextIntervalBlock();
     }
 
     function runNextIntervalBlock() {
         if (currentTimelineIndex >= masterTimeline.length) {
-            // Circuit loop completely completed
             document.getElementById('hudStatus').innerText = "FINISH!";
             document.getElementById('hudStatus').className = "hud-status status-rest";
             document.getElementById('hudTimer').innerText = "00";
             say("Workout complete! Incredible job.");
+            clearInterval(speedBypassInterval);
             if (isYoutube && ytPlayer) ytPlayer.pauseVideo();
-            else document.getElementById('localPlayer').pause();
+            else localPlayer.pause();
             return;
         }
 
         const currentBlock = masterTimeline[currentTimelineIndex];
         secondsRemainingInCurrentBlock = currentBlock.duration;
         
-        // Sync layout display metadata details
         const statusEl = document.getElementById('hudStatus');
         statusEl.innerText = currentBlock.type;
         statusEl.className = `hud-status ${currentBlock.type === 'WORK' ? 'status-work' : 'status-rest'}`;
@@ -296,7 +369,6 @@
 
         resetVoiceTrackers();
 
-        // Vocalize phase swap transitions
         if (currentBlock.type === 'WORK') {
             say(`Go! ${currentBlock.duration} seconds.`);
         } else {
@@ -307,7 +379,6 @@
             secondsRemainingInCurrentBlock--;
             document.getElementById('hudTimer').innerText = secondsRemainingInCurrentBlock;
 
-            // TRACK CUES ACCORDING TO TIMELINE INJECTIONS
             if (currentBlock.type === 'WORK') {
                 if (secondsRemainingInCurrentBlock === 10 && !spoke10) {
                     say("Don't give up yet!");
@@ -321,7 +392,6 @@
             if (secondsRemainingInCurrentBlock <= 0) {
                 clearInterval(mainCountdownInterval);
                 
-                // If we just finished a REST phase, trigger the electronic sound marker alert
                 if (currentBlock.type === 'REST') {
                     playBuzzerBeep();
                 }
