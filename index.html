@@ -2,262 +2,340 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pure Visual OCR Workout Timer</title>
+    <title>Custom Circuit Workout Timer</title>
     <style>
         body {
-            font-family: 'Courier New', monospace;
-            background: #0d0d11;
-            color: #00ffcc;
-            padding: 30px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f0f12;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        .control-panel {
-            background: #161622;
-            border: 2px solid #00ffcc;
-            padding: 25px;
-            border-radius: 8px;
-            text-align: center;
-            max-width: 650px;
+
+        .container {
+            max-width: 1000px;
             width: 100%;
-            margin-bottom: 25px;
-            box-shadow: 0 0 15px rgba(0,255,204,0.2);
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
         }
-        .video-viewport {
-            position: relative;
-            display: inline-block;
-            border: 3px solid #222;
-            background: #000;
+
+        @media (min-width: 800px) {
+            .container { grid-template-columns: 1fr 1fr; }
+            .full-width { grid-column: span 2; }
         }
-        video {
-            max-width: 100%;
-            display: block;
+
+        .panel {
+            background: #17171c;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border: 1px solid #26262b;
         }
-        /* The literal crop target box */
-        #timerTargetBox {
-            position: absolute;
-            border: 2px dashed #ff3366;
-            background: rgba(255, 51, 102, 0.15);
-            width: 100px;
-            height: 50px;
-            top: 10%;
-            left: 75%;
-            cursor: move;
-            box-sizing: border-box;
+
+        h2 { margin-top: 0; color: #ff4757; display: flex; justify-content: space-between; align-items: center; }
+        label { display: block; margin: 10px 0 5px; color: #a4b0be; font-size: 14px; }
+        
+        input, select {
+            width: 100%; padding: 10px; background: #222227; border: 1px solid #3a3a42;
+            border-radius: 6px; color: white; font-size: 15px; box-sizing: border-box;
         }
-        #timerTargetBox::before {
-            content: 'FIT BOX TIGHTLY OVER DIGITS';
-            position: absolute;
-            bottom: -18px;
-            left: 0;
-            background: #ff3366;
-            color: #fff;
-            font-size: 9px;
-            padding: 1px 4px;
-            white-space: nowrap;
-        }
-        .monitor-screen {
-            background: #000;
-            border: 1px solid #333;
-            padding: 15px;
-            width: 100%;
-            max-width: 650px;
-            margin-top: 20px;
-            height: 150px;
-            overflow-y: auto;
-            color: #00ffcc;
-            font-size: 13px;
-        }
-        #capturedDebugCanvas {
-            border: 1px solid #00ffcc;
-            background: #000;
-            margin-top: 10px;
-            width: 100px;
-            height: 50px;
-            image-rendering: pixelated;
-        }
+
         .btn {
-            padding: 12px 24px;
-            background: #00ffcc;
-            color: #000;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 14px;
+            background: #ff4757; color: white; border: none; padding: 12px 20px;
+            border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;
+            width: 100%; margin-top: 10px; font-size: 15px;
         }
-        .btn:hover { background: #fff; }
+        .btn:hover { background: #ff6b81; }
+        .btn-secondary { background: #2ed573; }
+        .btn-secondary:hover { background: #26af5f; }
+
+        /* Exercise List Styling */
+        .exercise-item {
+            background: #222227; padding: 12px; border-radius: 6px; margin-bottom: 10px;
+            display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: center;
+            border-left: 4px solid #ff4757;
+        }
+
+        /* Live HUD Display */
+        .hud { text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; }
+        .hud-status { font-size: 24px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+        .hud-timer { font-size: 96px; font-weight: 900; margin: 10px 0; font-variant-numeric: tabular-nums; }
+        
+        .status-work { color: #ff4757; }
+        .status-rest { color: #2ed573; }
+
+        .video-box { position: relative; padding-bottom: 56.25%; height: 0; border-radius: 8px; overflow: hidden; background: #000; }
+        .video-box iframe, .video-box video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
     </style>
 </head>
 <body>
 
-    <div class="control-panel">
-        <h2>👁️ PURE VISUAL TIMER TRACKER</h2>
-        <p style="color: #8aa;">Upload your video, play it, and position the red target box tightly over the changing seconds digits.</p>
-        <input type="file" id="videoPicker" accept="video/*">
-        <br><br>
-        <button id="launchTrackingBtn" class="btn" style="display: none;">ENGAGE VISION ENGINE</button>
+<div class="container">
+    
+    <div class="panel full-width">
+        <h1 style="margin: 0; font-size: 28px; color: #ff4757; text-align: center;">⚡ Custom Circuit Workout Muter</h1>
     </div>
 
-    <div class="video-viewport">
-        <video id="exerciseVideo" preload="auto" controls></video>
-        <div id="timerTargetBox"></div>
+    <!-- LEFT SIDE: CONTROLS & CIRCUIT BUILDER -->
+    <div class="panel">
+        <h2>1. Video Setup</h2>
+        <label>YouTube Link OR Local Video File</label>
+        <input type="text" id="videoUrl" placeholder="Paste YouTube Link here..." style="margin-bottom: 10px;">
+        <input type="file" id="localVideo" accept="video/*">
+        
+        <label>When does the first exercise start in the video? (MM:SS)</label>
+        <input type="text" id="videoStartTime" value="00:00" placeholder="e.g. 01:15">
+
+        <h2 style="margin-top: 30px;">2. Build Your Circuit</h2>
+        <div id="builderInputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+            <div>
+                <label>How Many?</label>
+                <input type="number" id="inputCount" value="1" min="1">
+            </div>
+            <div>
+                <label>Work (Sec)</label>
+                <input type="number" id="inputWork" value="45" min="5">
+            </div>
+            <div>
+                <label>Rest (Sec)</label>
+                <input type="number" id="inputRest" value="15" min="0">
+            </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="addExerciseBlock()">+ Add to Circuit</button>
+
+        <h3 style="color: #a4b0be; margin-top: 20px;">Your Timeline:</h3>
+        <div id="circuitTimeline"></div>
+        
+        <button class="btn" style="background: #2ed573; font-size: 18px; margin-top: 20px;" onclick="startWorkoutCircuit()">▶ START WORKOUT</button>
     </div>
 
-    <div style="text-align: center; margin-top: 15px;">
-        <span style="font-size: 11px; color: #8aa;">AI SEES THIS LIVE BLACK & WHITE MATRIX:</span><br>
-        <canvas id="capturedDebugCanvas"></canvas>
-    </div>
+    <!-- RIGHT SIDE: LIVE PLAYER & TIMER HUD -->
+    <div class="panel" style="display: flex; flex-direction: column; gap: 20px;">
+        <h2>3. Workout Display</h2>
+        
+        <!-- Video Screen Element Wrapper -->
+        <div class="video-box" id="mediaWrapper">
+            <div id="ytPlayer"></div>
+            <video id="localPlayer" style="display:none;" controls></video>
+        </div>
 
-    <div class="monitor-screen">
-        <div style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 8px; font-weight: bold; color: #ff3366;">LIVE PIXEL ANALYTICS:</div>
-        <div id="terminalLog">> System idle. Awaiting MP4 workout video payload...</div>
+        <!-- The Time Keeping HUD -->
+        <div class="panel" style="background: #1c1c24; flex-grow: 1;">
+            <div class="hud">
+                <div id="hudStatus" class="hud-status status-work">Awaiting Start</div>
+                <div id="hudTimer" class="hud-timer">00</div>
+                <div id="hudMeta" style="color: #a4b0be;">Round: 0/0</div>
+            </div>
+        </div>
     </div>
+</div>
+
+<!-- Load YouTube Framework -->
+<script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
-    const videoPicker = document.getElementById('videoPicker');
-    const video = document.getElementById('exerciseVideo');
-    const targetBox = document.getElementById('timerTargetBox');
-    const launchBtn = document.getElementById('launchTrackingBtn');
-    const logDisplay = document.getElementById('terminalLog');
-    const debugCanvas = document.getElementById('capturedDebugCanvas');
-    const dCtx = debugCanvas.getContext('2d');
-
-    let processingTimer = null;
-    let baselinePixels = null;
+    let ytPlayer;
+    let isYoutube = false;
+    let circuit = [];
     
-    // Core voice event states
-    let voiceTriggers = { "10": false, "3": false, "2": false, "1": false };
+    // Engine State Flags
+    let masterTimeline = []; 
+    let currentTimelineIndex = 0;
+    let mainCountdownInterval = null;
+    let secondsRemainingInCurrentBlock = 0;
 
-    function say(phrase) {
+    // Trackers to stop double vocalizing within the same single second clock ticks
+    let spoke10 = false, spoke3 = false, spoke2 = false, spoke1 = false;
+
+    // Audio context for the rest buzzer beep sound
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBuzzerBeep() {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime); // High frequency alert beep
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4); // Long sharp beep duration
+    }
+
+    function say(text) {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(phrase);
-        utter.rate = 1.2;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.15;
         window.speechSynthesis.speak(utter);
     }
 
-    function writeLog(text) {
-        logDisplay.innerHTML += `<br>> ${text}`;
-        logDisplay.parentNode.scrollTop = logDisplay.parentNode.scrollHeight;
+    function timeToSeconds(str) {
+        const p = str.split(':');
+        return p.length === 2 ? (parseInt(p[0], 10) * 60) + parseInt(p[1], 10) : parseInt(str, 10) || 0;
     }
 
-    videoPicker.addEventListener('change', (e) => {
+    // Handle Local Video Files upload stream mapping
+    document.getElementById('localVideo').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
-
-        video.src = URL.createObjectURL(file);
-        video.muted = true; // HARD ENFORCED MUTE. No native audio escapes.
-        
-        launchBtn.style.display = 'inline-block';
-        writeLog(`Video payload linked. Adjust the red target bracket onto the countdown numbers.`);
+        isYoutube = false;
+        document.getElementById('ytPlayer').style.display = 'none';
+        const vp = document.getElementById('localPlayer');
+        vp.style.display = 'block';
+        vp.src = URL.createObjectURL(file);
+        vp.muted = true; // HARD ENFORCED AUDIO BLOCK
     });
 
-    launchBtn.addEventListener('click', () => {
-        writeLog("Vision tracker processing initialized. Scanning pixel arrays directly...");
-        // Scan at 10 frames per second. High speed to ensure we never miss a number change.
-        processingTimer = setInterval(scanVisualMatrix, 100);
-    });
+    function addExerciseBlock() {
+        const count = parseInt(document.getElementById('inputCount').value, 10);
+        const work = parseInt(document.getElementById('inputWork').value, 10);
+        const rest = parseInt(document.getElementById('inputRest').value, 10);
 
-    function scanVisualMatrix() {
-        if (video.paused || video.ended) return;
-
-        // Map layout dimensions to true native video resolution coordinates
-        const scalarX = video.videoWidth / video.clientWidth;
-        const scalarY = video.videoHeight / video.clientHeight;
-
-        const frameX = targetBox.offsetLeft * scalarX;
-        const frameY = targetBox.offsetTop * scalarY;
-        const frameW = targetBox.offsetWidth * scalarX;
-        const frameH = targetBox.offsetHeight * scalarY;
-
-        if (frameW <= 0 || frameH <= 0) return;
-
-        debugCanvas.width = frameW;
-        debugCanvas.height = frameH;
-
-        // Snatch raw pixels straight from the video card into our isolated canvas
-        dCtx.drawImage(video, frameX, frameY, frameW, frameH, 0, 0, frameW, frameH);
-
-        // Convert frame into ultra-high contrast binary data (Pure Black and Pure White pixels)
-        // This makes tracking shapes reliable regardless of shadows or background shifts.
-        let imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
-        let pixels = imgData.data;
-        let whitePixelCount = 0;
-
-        for (let i = 0; i < pixels.length; i += 4) {
-            let brightness = 0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2];
-            let binary = brightness > 160 ? 255 : 0; 
-            pixels[i] = pixels[i+1] = pixels[i+2] = binary;
-            if (binary === 255) whitePixelCount++;
+        for (let i = 0; i < count; i++) {
+            circuit.push({ work: work, rest: rest });
         }
-        dCtx.putImageData(imgData, 0, 0);
+        renderTimelineUI();
+    }
 
-        // --- THE ENGINE LOGIC (NO MATH, NO CLOCK LENGTH) ---
-        // Every single digit has a distinct geometric footprint (number of white pixels it draws).
-        // The script reads the total density profile directly from the screen.
-        if (!baselinePixels) {
-            baselinePixels = whitePixelCount;
+    function renderTimelineUI() {
+        const container = document.getElementById('circuitTimeline');
+        container.innerHTML = '';
+        circuit.forEach((item, idx) => {
+            container.innerHTML += `
+                <div class="exercise-item">
+                    <strong>Interval #${idx + 1}</strong>
+                    <span class="status-work">🔥 ${item.work}s</span>
+                    <span class="status-rest">💤 ${item.rest}s</span>
+                </div>`;
+        });
+    }
+
+    function startWorkoutCircuit() {
+        if (circuit.length === 0) {
+            alert("Please add at least one exercise step to your circuit block timeline!");
             return;
         }
 
-        // Detect if the visual number on screen has actively flipped
-        if (Math.abs(whitePixelCount - baselinePixels) > (pixels.length * 0.02)) {
-            
-            // Analyze the exact geometric structure of the on-screen glyph
-            // These structural weight profiles match standard digital fitness timer fonts
-            const widthRatio = whitePixelCount / (pixels.length / 4);
-            
-            // Round to simulated digit structures
-            let detectedVisualDigit = null;
-            if (widthRatio > 0.18 && widthRatio < 0.24) detectedVisualDigit = 1;
-            if (widthRatio > 0.28 && widthRatio < 0.35) detectedVisualDigit = 2;
-            if (widthRatio > 0.36 && widthRatio < 0.44) detectedVisualDigit = 3;
-            if (widthRatio > 0.45 && widthRatio < 0.55) detectedVisualDigit = 10;
-
-            if (detectedVisualDigit) {
-                writeLog(`VISUAL TARGET DETECTED ON SCREEN: [${detectedVisualDigit}] (Density structural ratio: ${widthRatio.toFixed(2)})`);
-                executeVocalCue(detectedVisualDigit);
+        // 1. Build flattened master time block map queue array
+        masterTimeline = [];
+        circuit.forEach((round, index) => {
+            masterTimeline.push({ type: 'WORK', duration: round.work, label: `Round ${index + 1}` });
+            if (round.rest > 0) {
+                masterTimeline.push({ type: 'REST', duration: round.rest, label: `Rest ${index + 1}` });
             }
+        });
+
+        currentTimelineIndex = 0;
+        
+        // 2. Fire up video content handling
+        const ytUrl = document.getElementById('videoUrl').value;
+        const startSec = timeToSeconds(document.getElementById('videoStartTime').value);
+
+        if (ytUrl.trim() !== "") {
+            isYoutube = true;
+            document.getElementById('localPlayer').style.display = 'none';
+            document.getElementById('ytPlayer').style.display = 'block';
             
-            baselinePixels = whitePixelCount;
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = ytUrl.match(regExp);
+            const videoId = (match && match[2].length === 11) ? match[2] : null;
+
+            if (ytPlayer) {
+                ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
+                ytPlayer.mute();
+                ytPlayer.playVideo();
+            } else {
+                ytPlayer = new YT.Player('ytPlayer', {
+                    videoId: videoId,
+                    playerVars: { 'start': startSec, 'controls': 1, 'playsinline': 1 },
+                    events: {
+                        'onReady': (e) => { e.target.mute(); e.target.playVideo(); }
+                    }
+                });
+            }
+        } else {
+            // Local Player processing routing
+            const vp = document.getElementById('localPlayer');
+            if (vp.src) {
+                vp.currentTime = startSec;
+                vp.muted = true;
+                vp.play();
+            }
         }
+
+        // 3. Kickoff the interval tracker loop
+        clearInterval(mainCountdownInterval);
+        runNextIntervalBlock();
     }
 
-    function executeVocalCue(digit) {
-        if (digit === 10 && !voiceTriggers["10"]) {
-            say("Don't give up yet!");
-            voiceTriggers["10"] = true;
+    function runNextIntervalBlock() {
+        if (currentTimelineIndex >= masterTimeline.length) {
+            // Circuit loop completely completed
+            document.getElementById('hudStatus').innerText = "FINISH!";
+            document.getElementById('hudStatus').className = "hud-status status-rest";
+            document.getElementById('hudTimer').innerText = "00";
+            say("Workout complete! Incredible job.");
+            if (isYoutube && ytPlayer) ytPlayer.pauseVideo();
+            else document.getElementById('localPlayer').pause();
+            return;
         }
-        if (digit === 3 && !voiceTriggers["3"]) {
-            say("3");
-            voiceTriggers["3"] = true;
+
+        const currentBlock = masterTimeline[currentTimelineIndex];
+        secondsRemainingInCurrentBlock = currentBlock.duration;
+        
+        // Sync layout display metadata details
+        const statusEl = document.getElementById('hudStatus');
+        statusEl.innerText = currentBlock.type;
+        statusEl.className = `hud-status ${currentBlock.type === 'WORK' ? 'status-work' : 'status-rest'}`;
+        document.getElementById('hudMeta').innerText = currentBlock.label;
+        document.getElementById('hudTimer').innerText = secondsRemainingInCurrentBlock;
+
+        resetVoiceTrackers();
+
+        // Vocalize phase swap transitions
+        if (currentBlock.type === 'WORK') {
+            say(`Go! ${currentBlock.duration} seconds.`);
+        } else {
+            say("Rest time.");
         }
-        if (digit === 2 && !voiceTriggers["2"]) {
-            say("2");
-            voiceTriggers["2"] = true;
-        }
-        if (digit === 1 && !voiceTriggers["1"]) {
-            say("1");
-            voiceTriggers["1"] = true;
-        }
+
+        mainCountdownInterval = setInterval(() => {
+            secondsRemainingInCurrentBlock--;
+            document.getElementById('hudTimer').innerText = secondsRemainingInCurrentBlock;
+
+            // TRACK CUES ACCORDING TO TIMELINE INJECTIONS
+            if (currentBlock.type === 'WORK') {
+                if (secondsRemainingInCurrentBlock === 10 && !spoke10) {
+                    say("Don't give up yet!");
+                    spoke10 = true;
+                }
+                if (secondsRemainingInCurrentBlock === 3 && !spoke3) { say("3"); spoke3 = true; }
+                if (secondsRemainingInCurrentBlock === 2 && !spoke2) { say("2"); spoke2 = true; }
+                if (secondsRemainingInCurrentBlock === 1 && !spoke1) { say("1"); spoke1 = true; }
+            }
+
+            if (secondsRemainingInCurrentBlock <= 0) {
+                clearInterval(mainCountdownInterval);
+                
+                // If we just finished a REST phase, trigger the electronic sound marker alert
+                if (currentBlock.type === 'REST') {
+                    playBuzzerBeep();
+                }
+
+                currentTimelineIndex++;
+                runNextIntervalBlock();
+            }
+        }, 1000);
     }
 
-    // Interactive Drag Mechanics for positioning overlay box over video elements
-    let dragging = false, cursorX, cursorY, boxLeft, boxTop;
-    targetBox.addEventListener('mousedown', (e) => {
-        dragging = true;
-        cursorX = e.clientX; cursorY = e.clientY;
-        boxLeft = targetBox.offsetLeft; boxTop = targetBox.offsetTop;
-        e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        let dx = e.clientX - cursorX; let dy = e.clientY - cursorY;
-        targetBox.style.left = `${Math.max(0, Math.min(video.clientWidth - targetBox.offsetWidth, boxLeft + dx))}px`;
-        targetBox.style.top = `${Math.max(0, Math.min(video.clientHeight - targetBox.offsetHeight, boxTop + dy))}px`;
-    });
-    window.addEventListener('mouseup', () => dragging = false);
+    function resetVoiceTrackers() {
+        spoke10 = false; spoke3 = false; spoke2 = false; spoke1 = false;
+    }
 </script>
+
 </body>
 </html>
