@@ -2,213 +2,253 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Workout Muter & Countdown</title>
+    <title>Ultimate OCR Video Timer</title>
+    <!-- We pull the verified web-worker distribution of Tesseract for in-browser OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
+            font-family: monospace;
+            background: #0a0a0a;
+            color: #00ff66;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px 20px;
-            margin: 0;
         }
-        .card {
-            background: #1e1e1e;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        .setup-box {
+            border: 2px solid #00ff66;
+            padding: 20px;
+            background: #111;
+            text-align: center;
+            margin-bottom: 20px;
             max-width: 600px;
             width: 100%;
-            margin-bottom: 24px;
         }
-        .input-group {
-            margin-bottom: 16px;
+        .video-wrapper {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #333;
         }
-        label {
+        video {
+            max-width: 100%;
             display: block;
-            margin-bottom: 8px;
-            color: #a4b0be;
-            font-size: 14px;
         }
-        input {
-            width: 100%;
-            padding: 12px;
-            background: #2f3542;
-            border: 1px solid #57606f;
-            border-radius: 6px;
-            color: white;
-            font-size: 16px;
+        /* Crop Target Box over the video frame */
+        #cropZone {
+            position: absolute;
+            border: 2px dashed #ff0055;
+            background: rgba(255, 0, 85, 0.1);
+            width: 140px;
+            height: 70px;
+            top: 20px;
+            left: 20px;
+            cursor: move;
             box-sizing: border-box;
         }
-        button {
-            width: 100%;
-            padding: 14px;
-            background: #ff4757;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        button:hover {
-            background: #ff6b81;
-        }
-        .video-container {
-            position: relative;
-            padding-bottom: 56.25%;
-            height: 0;
-            width: 100%;
-            max-width: 800px;
-            border-radius: 12px;
-            overflow: hidden;
-            display: none;
-            box-shadow: 0 12px 36px rgba(0,0,0,0.5);
-        }
-        .video-container iframe {
+        #cropZone::after {
+            content: 'ALIGN OVER TIMER';
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: -20px;
+            left: 0;
+            background: #ff0055;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            white-space: nowrap;
         }
+        .console {
+            background: #000;
+            border: 1px solid #333;
+            padding: 15px;
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+            height: 120px;
+            overflow-y: auto;
+            color: #00ff66;
+        }
+        /* Hidden background element utilized to cleanly isolate target frame bytes */
+        #ocrCanvas { display: none; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2 style="color: #ff4757; margin-top: 0;">Mute & Motivate</h2>
-        
-        <div class="input-group">
-            <label for="videoUrl">YouTube Video Link</label>
-            <input type="text" id="videoUrl" placeholder="https://www.youtube.com/watch?v=...">
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
-            <div class="input-group">
-                <label for="startTime">When exercise starts (MM:SS)</label>
-                <input type="text" id="startTime" value="00:00" placeholder="00:30">
-            </div>
-            <div class="input-group">
-                <label for="duration">Exercise Timer Length (Seconds)</label>
-                <input type="number" id="duration" value="45">
-            </div>
-        </div>
-
-        <button onclick="startWorkout()">Launch Workout</button>
+    <div class="setup-box">
+        <h2>AI OCR WORKOUT ENGINE</h2>
+        <p style="color: #888;">Select a local video file. The application will strip original audio and actively read the timer digits using OCR.</p>
+        <input type="file" id="videoFileInput" accept="video/*">
+        <br><br>
+        <button id="activateOcrBtn" style="padding: 10px 20px; background: #00ff66; border: none; font-weight: bold; cursor: pointer; display: none;">START TRACKING</button>
     </div>
 
-    <div class="video-container" id="videoWrapper">
-        <div id="player"></div>
+    <div class="video-wrapper">
+        <video id="workoutVideo" preload="auto"></video>
+        <div id="cropZone"></div>
     </div>
 
-    <!-- YouTube Iframe API Loader -->
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <div class="console">
+        <div style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 5px; font-weight: bold;">LIVE LOGS:</div>
+        <div id="logOutput">> Awaiting local file selection...</div>
+    </div>
 
-    <script>
-        let player;
-        let trackingInterval;
+    <canvas id="ocrCanvas"></canvas>
+
+<script>
+    const fileInput = document.getElementById('videoFileInput');
+    const video = document.getElementById('workoutVideo');
+    const cropZone = document.getElementById('cropZone');
+    const activateBtn = document.getElementById('activateOcrBtn');
+    const logOutput = document.getElementById('logOutput');
+    const canvas = document.getElementById('ocrCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let tesseractWorker = null;
+    let scanningInterval = null;
+    let processingLock = false;
+
+    // Trackers to guarantee commands execute only once per timer tick
+    let internalFlags = { "10": false, "3": false, "2": false, "1": false };
+
+    // Speech Synth configuration
+    function triggerVoice(phrase) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(phrase);
+        utter.rate = 1.2;
+        window.speechSynthesis.speak(utter);
+    }
+
+    function printLog(msg) {
+        logOutput.innerHTML += `<br>> ${msg}`;
+        logOutput.parentNode.scrollTop = logOutput.parentNode.scrollHeight;
+    }
+
+    // Initialize the background worker instantly on launch
+    (async function initOcr() {
+        printLog("Initializing OCR Engine threads...");
+        tesseractWorker = await Tesseract.createWorker('eng');
+        await tesseractWorker.setParameters({
+            tessedit_char_whitelist: '0123456789:', // Force OCR to discard random background letter shapes
+            tessedit_pageseg_mode: '6'             // Analyze region as a uniform block of characters
+        });
+        printLog("OCR Engine completely active.");
+    })();
+
+    // Handle local data streaming pipelines
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        video.src = URL.createObjectURL(file);
         
-        // Trackers so the voice doesn't repeat within the same second
-        let triggered10 = false;
-        let triggered3 = false;
-        let triggered2 = false;
-        let triggered1 = false;
+        // CRUCIAL: Absolute mute constraint
+        video.muted = true; 
+        
+        activateBtn.style.display = 'inline-block';
+        printLog(`Loaded file: ${file.name}. Position the red target box over the clock numbers.`);
+    });
 
-        function convertToSeconds(timeStr) {
-            const parts = timeStr.split(':');
-            if (parts.length === 2) {
-                return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
-            }
-            return parseInt(timeStr, 10) || 0;
+    activateBtn.addEventListener('click', () => {
+        video.play();
+        printLog("Video playback started. Live scanning engaged...");
+        // Pull sample frames at regular intervals (approx 3 times a second)
+        scanningInterval = setInterval(extractAndProcessFrame, 350);
+    });
+
+    async function extractAndProcessFrame() {
+        if (processingLock || video.paused || video.ended || !tesseractWorker) return;
+
+        // Calculate dimensional scaling factors mapping UI elements to native matrix resolutions
+        const scaleX = video.videoWidth / video.clientWidth;
+        const scaleY = video.videoHeight / video.clientHeight;
+
+        const x = cropZone.offsetLeft * scaleX;
+        const y = cropZone.offsetTop * scaleY;
+        const w = cropZone.offsetWidth * scaleX;
+        const h = cropZone.offsetHeight * scaleY;
+
+        if (w <= 0 || h <= 0) return;
+
+        canvas.width = w;
+        canvas.height = h;
+
+        // Blit coordinates from source video matrix straight into tracking buffer canvas
+        ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
+
+        // Process pixel data to clean up compression artifacts and highlight text strings
+        let frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let pixels = frameData.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+            let luminance = 0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2];
+            let binaryColor = luminance > 130 ? 255 : 0; // High contrast filter
+            pixels[i] = pixels[i+1] = pixels[i+2] = binaryColor;
         }
+        ctx.putImageData(frameData, 0, 0);
 
-        function extractVideoId(url) {
-            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-            const match = url.match(regExp);
-            return (match && match[2].length === 11) ? match[2] : null;
-        }
+        processingLock = true;
 
-        function speak(text) {
-            window.speechSynthesis.cancel(); // Clear old queues
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 1.1; // Giving it some workout energy
-            window.speechSynthesis.speak(utterance);
-        }
+        try {
+            const { data: { text } } = await tesseractWorker.recognize(canvas);
+            const sanitized = text.replace(/[^0-9:]/g, '').trim();
 
-        function startWorkout() {
-            const url = document.getElementById('videoUrl').value;
-            const id = extractVideoId(url);
+            if (sanitized) {
+                // Break out standard split variations like "0:10" or just standard integers
+                const bits = sanitized.split(':');
+                const detectedSeconds = bits.length > 1 ? parseInt(bits[bits.length - 1], 10) : parseInt(sanitized, 10);
 
-            if (!id) {
-                alert("Please enter a valid YouTube link!");
-                return;
-            }
-
-            document.getElementById('videoWrapper').style.display = 'block';
-            const startSec = convertToSeconds(document.getElementById('startTime').value);
-
-            if (player) {
-                player.loadVideoById({ videoId: id, startSeconds: startSec });
-                resetFlags();
-                return;
-            }
-
-            player = new YT.Player('player', {
-                videoId: id,
-                playerVars: { 'start': startSec, 'controls': 1, 'playsinline': 1 },
-                events: {
-                    'onReady': (e) => { e.target.mute(); e.target.playVideo(); },
-                    'onStateChange': onPlayerStateChange
+                if (!isNaN(detectedSeconds)) {
+                    printLog(`Read Text: "${sanitized}" -> Interpreted Seconds: ${detectedSeconds}s`);
+                    checkVocalCues(detectedSeconds);
                 }
-            });
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            processingLock = false;
+        }
+    }
+
+    function checkVocalCues(seconds) {
+        if (seconds === 10 && !internalFlags["10"]) {
+            triggerVoice("Don't give up yet!");
+            internalFlags["10"] = true;
+        }
+        if (seconds === 3 && !internalFlags["3"]) {
+            triggerVoice("3");
+            internalFlags["3"] = true;
+        }
+        if (seconds === 2 && !internalFlags["2"]) {
+            triggerVoice("2");
+            internalFlags["2"] = true;
+        }
+        if (seconds === 1 && !internalFlags["1"]) {
+            triggerVoice("1");
+            internalFlags["1"] = true;
         }
 
-        function onPlayerStateChange(event) {
-            if (event.data == YT.PlayerState.PLAYING) {
-                clearInterval(trackingInterval);
-                trackingInterval = setInterval(checkTime, 200); // Check time 5 times a second
-            } else {
-                clearInterval(trackingInterval);
-            }
+        // Reset if the video loops or context timer goes back up
+        if (seconds > 12) {
+            internalFlags = { "10": false, "3": false, "2": false, "1": false };
         }
+    }
 
-        function checkTime() {
-            const currentTime = player.getCurrentTime();
-            const startSec = convertToSeconds(document.getElementById('startTime').value);
-            const totalDuration = parseInt(document.getElementById('duration').value, 10);
-
-            // Calculate exact seconds remaining on your exercise clock
-            const elapsedWorkoutTime = currentTime - startSec;
-            const secondsLeft = Math.ceil(totalDuration - elapsedWorkoutTime);
-
-            // Reset tags if you jump backward or restart
-            if (elapsedWorkoutTime < 1) resetFlags();
-
-            if (secondsLeft === 10 && !triggered10) {
-                speak("Don't give up yet!");
-                triggered10 = true;
-            }
-            if (secondsLeft === 3 && !triggered3) {
-                speak("3");
-                triggered3 = true;
-            }
-            if (secondsLeft === 2 && !triggered2) {
-                speak("2");
-                triggered2 = true;
-            }
-            if (secondsLeft === 1 && !triggered1) {
-                speak("1");
-                triggered1 = true;
-            }
-        }
-
-        function resetFlags() {
-            triggered10 = false;
-            triggered3 = false;
-            triggered2 = false;
-            triggered1 = false;
-        }
-    </script>
+    // Basic Drag Functionality for the Bounding Crop overlay box
+    let activeDrag = false, offsetStartX, offsetStartY, elementStartX, elementStartY;
+    cropZone.addEventListener('mousedown', (e) => {
+        activeDrag = true;
+        offsetStartX = e.clientX;
+        offsetStartY = e.clientY;
+        elementStartX = cropZone.offsetLeft;
+        elementStartY = cropZone.offsetTop;
+        e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!activeDrag) return;
+        let changeX = e.clientX - offsetStartX;
+        let changeY = e.clientY - offsetStartY;
+        cropZone.style.left = `${Math.max(0, Math.min(video.clientWidth - cropZone.offsetWidth, elementStartX + changeX))}px`;
+        cropZone.style.top = `${Math.max(0, Math.min(video.clientHeight - cropZone.offsetHeight, elementStartY + changeY))}px`;
+    });
+    window.addEventListener('mouseup', () => activeDrag = false);
+</script>
 </body>
 </html>
